@@ -2,7 +2,7 @@ name: Oracle Instance Catcher
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
@@ -31,18 +31,27 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}" > ~/.ssh/id_rsa.pub
 
-      - name: Try launch instance
+      - name: Retry loop
         run: |
-          oci compute instance launch \
-            --compartment-id "${{ secrets.OCI_COMPARTMENT }}" \
-            --availability-domain "${{ secrets.OCI_AD }}" \
-            --shape "VM.Standard.A1.Flex" \
-            --shape-config '{"ocpus": 2, "memoryInGBs": 12}' \
-            --subnet-id "${{ secrets.OCI_SUBNET }}" \
-            --image-id "${{ secrets.OCI_IMAGE }}" \
-            --display-name "vote-parfums-server" \
-            --assign-public-ip true \
-            --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
+          END=$((SECONDS+21000))
+          while [ $SECONDS -lt $END ]; do
+            echo "$(date): mencoba..."
+            if oci compute instance launch \
+              --compartment-id "${{ secrets.OCI_COMPARTMENT }}" \
+              --availability-domain "${{ secrets.OCI_AD }}" \
+              --shape "VM.Standard.A1.Flex" \
+              --shape-config '{"ocpus": 2, "memoryInGBs": 12}' \
+              --subnet-id "${{ secrets.OCI_SUBNET }}" \
+              --image-id "${{ secrets.OCI_IMAGE }}" \
+              --display-name "vote-parfums-server" \
+              --assign-public-ip true \
+              --ssh-authorized-keys-file ~/.ssh/id_rsa.pub; then
+              echo "BERHASIL"
+              exit 0
+            fi
+            sleep 45
+          done
+          echo "Belum berhasil sesi ini, lanjut sesi berikutnya"
 
       - name: Notify success
         if: success()
