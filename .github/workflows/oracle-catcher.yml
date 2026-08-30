@@ -1,0 +1,49 @@
+name: Oracle Instance Catcher
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  catch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install OCI CLI
+        run: pip install oci-cli
+
+      - name: Setup OCI config
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/key.pem
+          chmod 600 ~/.oci/key.pem
+          cat <<EOF > ~/.oci/config
+          [DEFAULT]
+          user=${{ secrets.OCI_USER }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_TENANCY }}
+          region=${{ secrets.OCI_REGION }}
+          key_file=~/.oci/key.pem
+          EOF
+
+      - name: Setup SSH public key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}" > ~/.ssh/id_rsa.pub
+
+      - name: Try launch instance
+        run: |
+          oci compute instance launch \
+            --compartment-id "${{ secrets.OCI_COMPARTMENT }}" \
+            --availability-domain "${{ secrets.OCI_AD }}" \
+            --shape "VM.Standard.A1.Flex" \
+            --shape-config '{"ocpus": 2, "memoryInGBs": 12}' \
+            --subnet-id "${{ secrets.OCI_SUBNET }}" \
+            --image-id "${{ secrets.OCI_IMAGE }}" \
+            --display-name "vote-parfums-server" \
+            --assign-public-ip true \
+            --ssh-authorized-keys-file ~/.ssh/id_rsa.pub
+
+      - name: Notify success
+        if: success()
+        run: curl -d "VM Oracle berhasil menyala! Cek console Oracle." ntfy.sh/${{ secrets.NTFY_TOPIC }}
